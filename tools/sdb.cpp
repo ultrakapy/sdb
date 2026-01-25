@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string_view>
 #include <string>
+#include <cstring>
 #include <vector>
 #include <algorithm>
 #include <sstream>
@@ -12,42 +13,30 @@
 
 #include <editline/readline.h>
 
-#include <libsdb/libsdb.hpp>
+#include <libsdb/process.hpp>
+#include <libsdb/error.hpp>
+
+/* 
+On some versions of Ubuntu 20.04, sys_sigabbrev is not always 
+exposed in headers for C++. This manual declaration ensures access:
+*/
+extern "C" const char *const sys_sigabbrev[];
+/* Also assumes the following already included:
+#define _GNU_SOURCE // either at the very top of this file or by CMake
+#include <cstring>  // For sys_sigabbrev (minimal header)
+*/
 
 namespace {
-  pid_t attach(int argc, const char** argv) {
+  std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
     pid_t pid = 0;
     // Passing PID
     if (argc == 3 && argv[1] == std::string_view("-p")) {
       pid = std::atoi(argv[2]);
-      if (pid <= 0) {
-        std::cerr << "Invalid PID\n";
-        return -1;
-      }
-      if (ptrace(PTRACE_ATTACH, pid, /*addr=*/nullptr, /*data*/nullptr) < 0) {
-        std::perror("Could not attach");
-        return -1;
-      }
+      return sdb::process::attach(pid);
     } else { // Passing program name
       const char* program_path = argv[1];
-      if ((pid = fork()) < 0) {
-        std::perror("Fork failed");
-        return -1;
-      }
-
-      if (pid == 0) {
-        if (ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0) {
-          std::perror("Tracing failed");
-          return -1;
-        }
-        if (execlp(program_path, program_path, nullptr) < 0) {
-          std::perror("exec failed");
-          return -1;
-        }
-      }
+      return sdb::process::launch(program_path);
     }
-
-    return pid;
   }
 
   std::vector<std::string> split(std::string_view str, char delimiter) {
@@ -83,15 +72,64 @@ namespace {
     }
   }
 
-  void handle_command(pid_t pid, std::string_view line) {
+  void print_stop_reason(const sdb::process& process, sdb::stop_reason reason) {
+    std::cout << "Process " << process.pid() << ' ';
+
+    switch (reason.reason) {
+    case sdb::process_state::exited:
+      std::cout << "exited with status "
+                << static_cast<int>(reason.info);
+      break;
+    case sdb::process_state::terminated:
+      std::cout << "terminated with signal "
+                << sys_sigabbrev[reason.info];
+      break;
+    case sdb::process_state::stopped:
+      std::cout << "stopped with signal "
+                << sys_sigabbrev[reason.info];
+      break;
+    }
+
+    std::cout << std::endl;
+  }
+
+  void handle_command(std::unique_ptr<sdb::process>& process, std::string_view line) {
     auto args = split(line, ' ');
     auto command = args[0];
 
     if (is_prefix(command, "continue")) {
-      resume(pid);
-      wait_on_signal(pid);
+      process->resume();
+      auto reason = process->wait_on_signal();
+      print_stop_reason(*process, reason);
     } else {
       std::cerr << "Unknown command\n";
+    }
+  }
+
+  void main_loop(std::unique_ptr<sdb::process>& process) {
+    char* line = nullptr;
+    while ((line = readline("sdb> ")) != nullptr) {
+      std::string line_str;
+
+      if (line == std::string_view("")) {
+        free(line);
+        if (history_length > 0) {
+          line_str = history_list()[history_length - 1]->line;
+        }
+      } else {
+        line_str = line;
+        add_history(line);
+        free(line);
+      }
+
+      if (!line_str.empty()) {
+        try {
+          handle_command(process, line_str);
+        }
+        catch (const sdb::error& err) {
+          std::cout << err.what() << '\n';
+        }
+      }
     }
   }
 }
@@ -102,33 +140,12 @@ int main(int argc, const char** argv) {
     return -1;
   }
 
-  pid_t pid = attach(argc, argv);
-
-  int wait_status;
-  int options = 0;
-  if (waitpid(pid, &wait_status, options) < 0) {
-    std::perror("waitpid failed");
-    return -1;
+  try {
+    auto process = attach(argc, argv);
+    main_loop(process);
   }
-  
-  char* line = nullptr;
-  while ((line = readline("sdb> ")) != nullptr) {
-    std::string line_str;
-
-    if (line == std::string_view("")) {
-      free(line);
-      if (history_length > 0) {
-        line_str = history_list()[history_length - 1]->line;
-      }
-    } else {
-      line_str = line;
-      add_history(line);
-      free(line);
-    }
-
-    if (!line_str.empty()) {
-      handle_command(pid, line_str);
-    }
+  catch (const sdb::error& err) {
+    std::cout << err.what() << '\n';
   }
 }
 

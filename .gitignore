@@ -1,0 +1,82 @@
+# ==============================================================================
+# Standard C++ Git Ignore (Linux Focused + Cross-Platform Friendly)
+# ==============================================================================
+
+# === Compiled Objects and Libraries ===
+*.o
+*.obj
+*.so
+*.so.*
+*.a
+*.la
+*.lai
+*.dylib
+*.dll
+
+# === Executables ===
+*.exe
+*.out
+*.app
+# Ignore generic Linux binaries (if they have no extension, name them specifically)
+# /my_project_bin
+
+# === Build Directories ===
+# Using leading slashes to ensure we only ignore root-level build folders
+/[Bb]uild/
+/out/
+/bin/
+cmake-build-*/
+.cache/
+
+# === CMake Generated Files ===
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+_deps/
+# Local presets that shouldn't be shared
+CMakeUserPresets.json
+
+# === Package Managers ===
+# Conan
+conan/
+conan.lock
+# Vcpkg
+vcpkg_installed/
+vcpkg_scripts/
+
+# === IDE and Text Editor Files ===
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains (CLion/PyCharm)
+.idea/
+
+# General
+*.swp
+*~
+.DS_Store
+.history/
+
+# === Debug, Profiling, and Testing ===
+*.gch
+*.pch
+*.pdb
+*.dwo
+gmon.out
+.stackdump
+*.gcda
+*.gcno
+*.gcov
+
+# === Documentation ===
+/html/
+/latex/
+doxygen_objdb_*.tmp
