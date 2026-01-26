@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <sstream>
 
+#include <signal.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
 #include <sys/types.h>
@@ -15,16 +16,6 @@
 
 #include <libsdb/process.hpp>
 #include <libsdb/error.hpp>
-
-/* 
-On some versions of Ubuntu 20.04, sys_sigabbrev is not always 
-exposed in headers for C++. This manual declaration ensures access:
-*/
-extern "C" const char *const sys_sigabbrev[];
-/* Also assumes the following already included:
-#define _GNU_SOURCE // either at the very top of this file or by CMake
-#include <cstring>  // For sys_sigabbrev (minimal header)
-*/
 
 namespace {
   std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
@@ -72,6 +63,12 @@ namespace {
     }
   }
 
+  std::string sig_name(int sig) {
+    const char* s = strsignal(sig);
+    if (!s) s = "UNKNOWN";
+    return std::string(s);
+  }
+
   void print_stop_reason(const sdb::process& process, sdb::stop_reason reason) {
     std::cout << "Process " << process.pid() << ' ';
 
@@ -82,11 +79,11 @@ namespace {
       break;
     case sdb::process_state::terminated:
       std::cout << "terminated with signal "
-                << sys_sigabbrev[reason.info];
+                << sig_name(reason.info);
       break;
     case sdb::process_state::stopped:
       std::cout << "stopped with signal "
-                << sys_sigabbrev[reason.info];
+                << sig_name(reason.info);
       break;
     }
 
