@@ -1,4 +1,4 @@
-# 🛡️ Debugger: A Linux x86_64 Debugger
+# 🛡️ SDB: A Linux x86_64 Debugger
 
 A hobbyist debugger built from the ground up in Modern C++, following the architectural patterns outlined in Sy Brand's *"Building a Debugger"* series and book. This project explores the low-level mechanics of the Linux `ptrace` system call, DWARF debug information, and breakpoint injection.
 
