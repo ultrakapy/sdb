@@ -47,22 +47,6 @@ namespace {
     return std::equal(str.begin(), str.end(), of.begin());
   }
 
-  void resume(pid_t pid) {
-    if (ptrace(PTRACE_CONT, pid, nullptr, nullptr) < 0) {
-      std::cerr << "Couldn't continue\n";
-      std::exit(-1);
-    }
-  }
-
-  void wait_on_signal(pid_t pid) {
-    int wait_status;
-    int options = 0;
-    if (waitpid(pid, &wait_status, options) < 0) {
-      std::perror("waitpid failed");
-      std::exit(-1);
-    }
-  }
-
   std::string sig_name(int sig) {
     const char* s = strsignal(sig);
     if (!s) s = "UNKNOWN";
@@ -98,6 +82,13 @@ namespace {
       process->resume();
       auto reason = process->wait_on_signal();
       print_stop_reason(*process, reason);
+
+      // Only resume if the process is still alive
+      // And if we do resume, forward the signal that caused the stop
+      if (reason.reason != sdb::process_state::exited &&
+          reason.reason != sdb::process_state::terminated) {
+        process->resume(reason.info); // forward the observed signal
+      }
     } else {
       std::cerr << "Unknown command\n";
     }

@@ -43,7 +43,7 @@ namespace sdb {
     static std::unique_ptr<process> launch(std::filesystem::path path, bool debug = true);
     static std::unique_ptr<process> attach(pid_t pid);
 
-    void resume();
+    void resume(int signal = 0);
     stop_reason wait_on_signal();
 
     process() = delete;

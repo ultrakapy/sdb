@@ -85,8 +85,9 @@ sdb::process::~process() {
   }
 }
 
-void sdb::process::resume() {
-  if (ptrace(PTRACE_CONT, pid_, nullptr, nullptr) < 0) {
+void sdb::process::resume(int signal) {
+  // signal defaults to 0. if non-zero, it is delivered to the tracee
+  if (ptrace(PTRACE_CONT, pid_, nullptr, signal) < 0) {
     error::send_errno("Could not resume");
   }
   state_ = process_state::running;
