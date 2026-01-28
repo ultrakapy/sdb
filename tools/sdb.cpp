@@ -18,6 +18,8 @@
 #include <libsdb/error.hpp>
 
 namespace {
+  int last_stop_signal = 0;
+  
   std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
     pid_t pid = 0;
     // Passing PID
@@ -79,7 +81,7 @@ namespace {
     auto command = args[0];
 
     if (is_prefix(command, "continue")) {
-      process->resume();
+      process->resume(last_stop_signal);
       auto reason = process->wait_on_signal();
       print_stop_reason(*process, reason);
 
@@ -90,6 +92,7 @@ namespace {
         process->resume(reason.info); // forward the observed signal
         auto reason = process->wait_on_signal();
         print_stop_reason(*process, reason);
+        last_stop_signal = reason.info; // keep track of the last observed stop signal
       }
     } else {
       std::cerr << "Unknown command\n";
