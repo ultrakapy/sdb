@@ -81,23 +81,17 @@ namespace {
     auto command = args[0];
 
     if (is_prefix(command, "continue")) {
-      process->resume(last_stop_signal);
+      process->resume();
       auto reason = process->wait_on_signal();
       print_stop_reason(*process, reason);
 
-      // The first time we recieve a stop signal (i.e., last stop signal is zero and process state is stopped),
-      // forward the newly observed stop signal to the inferior
-      if (last_stop_signal == 0 && reason.reason != sdb::process_state::exited &&
+      // Keep forwarding stop signals to the inferior until it's exited or terminated
+      while (reason.reason != sdb::process_state::exited &&
           reason.reason != sdb::process_state::terminated) {
         process->resume(reason.info); // forward the observed signal
-        auto reason = process->wait_on_signal();
+        reason = process->wait_on_signal();
         print_stop_reason(*process, reason);
-        last_stop_signal = reason.info; // keep track of the last observed stop signal
-      } else if (last_stop_signal != 0) {
-        // Otherwise, if the last resume already forwarded a stop signal, save the new stop signal for the next
-        // iteration should the user choose to run the continue command again
-        last_stop_signal = reason.info;
-      }
+      } 
     } else {
       std::cerr << "Unknown command\n";
     }
