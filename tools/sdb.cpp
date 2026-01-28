@@ -88,6 +88,8 @@ namespace {
       if (reason.reason != sdb::process_state::exited &&
           reason.reason != sdb::process_state::terminated) {
         process->resume(reason.info); // forward the observed signal
+        auto reason = process->wait_on_signal();
+        print_stop_reason(*process, reason);
       }
     } else {
       std::cerr << "Unknown command\n";
