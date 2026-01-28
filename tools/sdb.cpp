@@ -85,14 +85,18 @@ namespace {
       auto reason = process->wait_on_signal();
       print_stop_reason(*process, reason);
 
-      // Only resume if the process is still alive
-      // And if we do resume, forward the signal that caused the stop
-      if (reason.reason != sdb::process_state::exited &&
+      // The first time we recieve a stop signal (i.e., last stop signal is zero and process state is stopped),
+      // forward the newly observed stop signal to the inferior
+      if (last_stop_signal == 0 && reason.reason != sdb::process_state::exited &&
           reason.reason != sdb::process_state::terminated) {
         process->resume(reason.info); // forward the observed signal
         auto reason = process->wait_on_signal();
         print_stop_reason(*process, reason);
         last_stop_signal = reason.info; // keep track of the last observed stop signal
+      } else if (last_stop_signal != 0) {
+        // Otherwise, if the last resume already forwarded a stop signal, save the new stop signal for the next
+        // iteration should the user choose to run the continue command again
+        last_stop_signal = reason.info;
       }
     } else {
       std::cerr << "Unknown command\n";
