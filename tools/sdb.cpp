@@ -18,8 +18,6 @@
 #include <libsdb/error.hpp>
 
 namespace {
-  int last_stop_signal = 0;
-  
   std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
     pid_t pid = 0;
     // Passing PID
