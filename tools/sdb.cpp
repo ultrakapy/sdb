@@ -5,8 +5,9 @@
 #include <vector>
 #include <algorithm>
 #include <sstream>
+#include <atomic>
+#include <csignal>
 
-#include <signal.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
 #include <sys/types.h>
@@ -18,6 +19,20 @@
 #include <libsdb/error.hpp>
 
 namespace {
+  std::atomic<bool> g_sigint{false};
+
+  void sigint_handler(int) {
+    g_sigint.store(true, std::memory_order_relaxed);
+  }
+
+  void install_sigint_handler() {
+    struct sigaction sa{};
+    sa.sa_handler = sigint_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, nullptr);
+  }
+
   std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
     pid_t pid = 0;
     // Passing PID
@@ -82,7 +97,7 @@ namespace {
 
     if (r.reason == sdb::process_state::stopped) {
       // SIGTRAP for breakpoint or single-step?
-      if (r.info == SIGTRAP)
+      if (r.info == SIGTRAP || r.info == SIGINT)
         return false;
 
       // Other signals may or may not be auto-forwarded
@@ -98,22 +113,40 @@ namespace {
     auto command = args[0];
 
     if (is_prefix(command, "continue")) {
-      process->resume();
-      auto reason = process->wait_on_signal();
-      print_stop_reason(*process, reason);
+      // Start with a clean slate: no signal to forward yet
+      int signal_to_forward = 0;
 
-      // Decided when to forward stop signals to inferior vs when to return control to user prompt
-      while (should_auto_continue(reason)) {
-        process->resume(reason.info); // forward the observed signal
-        reason = process->wait_on_signal();
+      while (true) {
+        process->resume(signal_to_forward);
+        auto reason = process->wait_on_signal();
+
+        // Single check for manual Ctrl+C (via the debugger)
+        if (g_sigint.exchange(false)) {
+          kill(process->pid(), SIGINT);
+          // Wait for the SIGINT we just sent to actually stop the process
+          reason = process->wait_on_signal();
+          print_stop_reason(*process, reason);
+          break; 
+        }
+
         print_stop_reason(*process, reason);
-      } 
+
+        // Check if the signal received (e.g. SIGINT or SIGTRAP) should return to prompt
+        if (!should_auto_continue(reason)) {
+          break;
+        }
+
+        // If we got here, we are auto-continuing and passing the signal along
+        signal_to_forward = reason.info;
+      }
     } else {
       std::cerr << "Unknown command\n";
     }
   }
 
   void main_loop(std::unique_ptr<sdb::process>& process) {
+    g_sigint.store(false); // Clear any "stale" interrupts from the prompt
+
     char* line = nullptr;
     while ((line = readline("sdb> ")) != nullptr) {
       std::string line_str;
@@ -146,6 +179,8 @@ int main(int argc, const char** argv) {
     std::cerr << "No arguments given\n";
     return -1;
   }
+
+  install_sigint_handler();
 
   try {
     auto process = attach(argc, argv);
