@@ -74,6 +74,25 @@ namespace {
     std::cout << std::endl;
   }
 
+  bool should_auto_continue(const sdb::stop_reason& r) {
+    if (r.reason == sdb::process_state::exited ||
+        r.reason == sdb::process_state::terminated) {
+      return false;
+    }
+
+    if (r.reason == sdb::process_state::stopped) {
+      // SIGTRAP for breakpoint or single-step?
+      if (r.info == SIGTRAP)
+        return false;
+
+      // Other signals may or may not be auto-forwarded
+      return true;
+    }
+
+    return false;
+  }
+
+
   void handle_command(std::unique_ptr<sdb::process>& process, std::string_view line) {
     auto args = split(line, ' ');
     auto command = args[0];
@@ -83,9 +102,8 @@ namespace {
       auto reason = process->wait_on_signal();
       print_stop_reason(*process, reason);
 
-      // Keep forwarding stop signals to the inferior until it's exited or terminated
-      while (reason.reason != sdb::process_state::exited &&
-          reason.reason != sdb::process_state::terminated) {
+      // Decided when to forward stop signals to inferior vs when to return control to user prompt
+      while (should_auto_continue(reason)) {
         process->resume(reason.info); // forward the observed signal
         reason = process->wait_on_signal();
         print_stop_reason(*process, reason);
