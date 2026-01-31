@@ -19,19 +19,44 @@
 #include <libsdb/error.hpp>
 
 namespace {
+  // This will trigger a compiler error if atomic<bool> uses a mutex
+  static_assert(std::atomic<bool>::is_always_lock_free,
+                "std::atomic<bool> must be lock-free for signal safety!");
+  // Asynchronous interrupt flag used in SIGINT handler
   std::atomic<bool> g_sigint{false};
 
+  // Signal handler to capture Ctrl+C
   void sigint_handler(int) {
     g_sigint.store(true, std::memory_order_relaxed);
   }
 
-  void install_sigint_handler() {
-    struct sigaction sa{};
-    sa.sa_handler = sigint_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGINT, &sa, nullptr);
-  }
+  /*
+    RAII guard to manage debugger signal handler lifecycle.
+    Captures original SIGINT state and restores it on destruction.
+   */
+  struct signal_restorer {
+    struct sigaction old_sa;
+
+    // Swap to debugger SIGINT handler and save original configuration
+    signal_restorer() {
+      struct sigaction sa{};
+      sa.sa_handler = sigint_handler;
+      sigemptyset(&sa.sa_mask);
+      sa.sa_flags = 0;
+
+      if (sigaction(SIGINT, &sa, &old_sa) < 0) {
+        sdb::error::send_errno("Failed to install SIGINT handler");
+      }
+    }
+
+    // Restore original SIGINT configuration
+    ~signal_restorer() {
+      if (sigaction(SIGINT, &old_sa, nullptr) < 0) {
+        // Log failure to restore; avoid throwing in destructor
+        std::cerr << "Warning: Failed to restore SIGINT handler\n";
+      }
+    }
+  };
 
   std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
     pid_t pid = 0;
@@ -113,7 +138,13 @@ namespace {
     auto command = args[0];
 
     if (is_prefix(command, "continue")) {
-      // Start with a clean slate: no signal to forward yet
+      // Just by declaring this guard, we install our SIGINT handler and save the old one.
+      signal_restorer guard;
+
+      // Start with a clean interrupt state
+      g_sigint.store(false);
+
+      // Start with no signal to forward yet
       int signal_to_forward = 0;
 
       while (true) {
@@ -145,8 +176,6 @@ namespace {
   }
 
   void main_loop(std::unique_ptr<sdb::process>& process) {
-    g_sigint.store(false); // Clear any "stale" interrupts from the prompt
-
     char* line = nullptr;
     while ((line = readline("sdb> ")) != nullptr) {
       std::string line_str;
@@ -180,14 +209,13 @@ int main(int argc, const char** argv) {
     return -1;
   }
 
-  install_sigint_handler();
-
   try {
     auto process = attach(argc, argv);
     main_loop(process);
   }
   catch (const sdb::error& err) {
     std::cout << err.what() << '\n';
+    return -1;
   }
 }
 
