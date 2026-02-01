@@ -32,6 +32,7 @@ The debugger operates by leveraging the **Linux ptrace API**, acting as the "tra
 
 * A Linux environment (x86_64)
 * `g++` or `clang` with C++17 support or higher
+* `libedit` (for command line interface)
 * `libelfin` (for DWARF/ELF parsing)
 * More TBD
 
