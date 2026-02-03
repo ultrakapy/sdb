@@ -5,6 +5,7 @@ A native x64 debugger built from the ground up in Modern C++, following the arch
 ## 🚀 Features
 
 * **Process Launching:** Start a tracee process and attach to it immediately.
+* **Process Attachment:** Attach to an already-running process by PID for live debugging.
 * **Breakpoint Management:**
     * Software breakpoints using `int 3` instruction injection.
     * Automatic instruction restoration on continue.
