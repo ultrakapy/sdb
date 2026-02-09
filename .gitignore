@@ -37,6 +37,8 @@ install_manifest.txt
 compile_commands.json
 Makefile
 _deps/
+CTestTestfile.cmake
+DartConfiguration.tcl
 # Local presets that shouldn't be shared
 CMakeUserPresets.json
 
@@ -47,6 +49,7 @@ conan.lock
 # Vcpkg
 vcpkg_installed/
 vcpkg_scripts/
+vcpkg-manifest-install.log
 
 # === IDE and Text Editor Files ===
 # VS Code
