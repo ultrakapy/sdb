@@ -62,20 +62,36 @@ namespace sdb {
 
   template <class F>
   std::optional<F> to_float(std::string_view sv) {
+    if (sv.empty()) return std::nullopt;
+
     F ret{};
 
     if constexpr (std::is_same_v<F, long double>) {
       // Use strtold for long double (GCC 9 compatible)
+      // GCC 9 / libstdc++ lacks std::from_chars for long double.
+      // We must emulate strict behavior using strtold.
+
+      // Enforce no leading whitespace (match from_chars behavior)
+      if (std::isspace(static_cast<unsigned char>(sv.front()))) {
+        return std::nullopt;
+      }
+
+      // Allocation is unavoidable for strtold (needs null-term)
       std::string temp(sv);  // strtold needs null-terminated string
       char* end;
       errno = 0;
+
+      // Note: strtold is locale-dependent.
+      // If this runs in non-C locales, this might fail on '.'
       ret = std::strtold(temp.c_str(), &end);
+
+      // Check for range errors and ensure full string consumption
       if (errno == 0 && end == temp.c_str() + temp.size()) {
         return ret;
       }
       return std::nullopt;
     } else {
-      // Use fast_float for float and double
+      // Use fast_float for float and double (GCC 9 compatible)
       auto result = fast_float::from_chars(sv.data(), sv.data() + sv.size(), ret);
 
       // require success and full consumption of the input range, otherwise return nullopt
