@@ -7,9 +7,12 @@
 #include <optional>
 #include <string_view>
 #include <array>
-#include <system_error>    // std::errc
-#include <fast_float/fast_float.h>
+#include <system_error>
 #include <cerrno>
+
+#include <fast_float/fast_float.h>
+
+#include <libsdb/error.hpp>
 
 namespace sdb {
   template <class I>
